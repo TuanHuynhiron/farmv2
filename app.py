@@ -24,9 +24,12 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, models, transforms
 from torch.utils.data import DataLoader
-from PIL import Image
+from PIL import Image, ImageOps
 from flask import Flask, render_template, request, jsonify
 from ultralytics import YOLO
+
+# Tương thích mọi phiên bản Pillow cho thuật toán nội suy sắc nét LANCZOS
+LANCZOS_RESAMPLE = getattr(Image, 'Resampling', Image).LANCZOS
 
 app = Flask(__name__)
 # Cho phép nhận Request dữ liệu tối đa 500 MB cho mỗi lần Upload
@@ -76,7 +79,6 @@ def split_dataset(dataset_dir, split_dir, train_ratio=0.7, val_ratio=0.2, test_r
     - Test (10%): Tập dữ liệu hoàn toàn độc lập, chưa từng xuất hiện trong quá trình train, 
                   dùng để đánh giá độ chính xác thực tế cuối cùng.
     """
-    # Nếu thư mục phân chia cũ đã tồn tại thì xóa đi làm mới để tránh lẫn lộn dữ liệu cũ
     if os.path.exists(split_dir):
         shutil.rmtree(split_dir)
         
@@ -91,7 +93,6 @@ def split_dataset(dataset_dir, split_dir, train_ratio=0.7, val_ratio=0.2, test_r
         c_src = os.path.join(dataset_dir, c)
         imgs = [f for f in os.listdir(c_src) if os.path.isfile(os.path.join(c_src, f))]
         
-        # Cố định Seed ngẫu nhiên (random.seed=42) để kết quả chia tập đồng nhất giữa các lần chạy
         random.seed(42)
         random.shuffle(imgs)
         
@@ -120,7 +121,6 @@ def split_dataset(dataset_dir, split_dir, train_ratio=0.7, val_ratio=0.2, test_r
         split_stats['val_total'] += len(val_imgs)
         split_stats['test_total'] += len(test_imgs)
         
-        # Copy ảnh thực tế vào các thư mục train/val/test riêng biệt
         for s in splits:
             s_dst = os.path.join(split_dir, s, c)
             os.makedirs(s_dst, exist_ok=True)
@@ -147,7 +147,6 @@ def compute_metrics(y_true, y_pred, class_names):
     num_classes = len(class_names)
     cm = [[0] * num_classes for _ in range(num_classes)]
     
-    # Xây dựng Ma trận nhầm lẫn NxN
     for t, p in zip(y_true, y_pred):
         if 0 <= t < num_classes and 0 <= p < num_classes:
             cm[t][p] += 1
@@ -159,14 +158,12 @@ def compute_metrics(y_true, y_pred, class_names):
             "confusion_matrix": cm, "per_class": {}, "total_samples": 0
         }
         
-    # Đường chéo chính sum(cm[i][i]) chính là tổng số mẫu dự đoán ĐÚNG
     correct = sum(cm[i][i] for i in range(num_classes))
     accuracy = round((correct / total_samples) * 100, 2)
     
     per_class = {}
     precisions, recalls, f1s = [], [], []
     
-    # Tính toán chi tiết cho từng lớp bệnh
     for i, name in enumerate(class_names):
         tp = cm[i][i]
         fp = sum(cm[k][i] for k in range(num_classes) if k != i)
@@ -187,7 +184,6 @@ def compute_metrics(y_true, y_pred, class_names):
             "samples": sum(cm[i])
         }
         
-    # Macro Average: Trung bình cộng chỉ số của tất cả các lớp
     macro_precision = round(sum(precisions) / num_classes, 2)
     macro_recall = round(sum(recalls) / num_classes, 2)
     macro_f1 = round(sum(f1s) / num_classes, 2)
@@ -302,25 +298,36 @@ def clear_stuck_training_status():
 clear_stuck_training_status()
 
 # ==============================================================================
-# 5. TIỀN XỬ LÝ VÀ CHUẨN HÓA ẢNH (DATA TRANSFORMS)
+# 5. TIỀN XỬ LÝ VÀ CHUẨN HÓA ẢNH (DATA TRANSFORMS GIỮ TỶ LỆ & SẮC NÉT)
 # ==============================================================================
-# [THẦY HỎI]: Tại sao lại dùng Resize(224, 224) và Normalize với các thông số kia?
-# [TRẢ LỜI]:
-# - Resize (224, 224): Độ phân giải chuẩn đầu vào của mạng MobileNetV2 và YOLOv8.
-# - RandomHorizontalFlip, RandomRotation(15): Kỹ thuật Data Augmentation (Tăng cường dữ liệu) 
-#   giúp tạo ảnh xoay/lật ngẫu nhiên, chống mô hình học thuộc lòng (Overfitting).
-# - Normalize ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]): Giá trị Mean và Std chuẩn 
-#   của tập dữ liệu ImageNet giúp chuẩn hóa phân phối màu sắc ảnh đầu vào.
+class SmartResize:
+    """
+    [THẦY HỎI]: Tại sao không dùng Resize((224, 224)) thông thường mà dùng SmartResize?
+    [TRẢ LỜI]:
+    - Resize((224, 224)) ép méo ảnh chữ nhật (4:3, 16:9) thành hình vuông làm biến dạng vết bệnh.
+    - SmartResize tự động xoay đúng hướng EXIF, giữ nguyên tỷ lệ khung hình bằng đệm viền
+      (Letterbox) màu xám chuẩn (114, 114, 114) và dùng bộ lọc LANCZOS chống răng cưa/mờ ảnh.
+    """
+    def __init__(self, size=224, fill=(114, 114, 114)):
+        self.size = (size, size) if isinstance(size, int) else size
+        self.fill = fill
+
+    def __call__(self, img):
+        img = ImageOps.exif_transpose(img)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        return ImageOps.pad(img, self.size, method=LANCZOS_RESAMPLE, color=self.fill)
+
 train_transforms = transforms.Compose([
-    transforms.Resize((224, 224)),
+    SmartResize(224),
     transforms.RandomHorizontalFlip(),
-    transforms.RandomRotation(15),
+    transforms.RandomRotation(15, fill=(114, 114, 114)),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
 eval_transforms = transforms.Compose([
-    transforms.Resize((224, 224)),
+    SmartResize(224),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
@@ -417,8 +424,13 @@ def add_sample(crop_type):
             filename = f"{existing_count + idx + 1}.jpg"
             filepath = os.path.join(class_dir, filename)
             try:
-                image = Image.open(file.stream).convert('RGB')
-                image.save(filepath)
+                image = Image.open(file.stream)
+                # Xoay đúng hướng EXIF của điện thoại & chuyển RGB
+                image = ImageOps.exif_transpose(image).convert('RGB')
+                # Nếu ảnh chụp quá lớn (>1280px), thu nhỏ giữ nguyên tỷ lệ bằng LANCZOS để nhẹ ổ cứng mà vẫn nét
+                if max(image.size) > 1280:
+                    image.thumbnail((1280, 1280), LANCZOS_RESAMPLE)
+                image.save(filepath, format='JPEG', quality=95)
                 saved_count += 1
             except Exception:
                 continue
@@ -514,7 +526,6 @@ def train_model(crop_type):
                 if os.path.exists(best_weights):
                     shutil.copy(best_weights, yolo_path)
 
-                # Đánh giá YOLOv8 trên cả 3 tập Train, Val, Test
                 save_status(crop_type, "running", 48, "📈 Đánh giá YOLOv8...", "📈 Đang tính toán Confusion Matrix & Metrics cho YOLOv8...")
                 yolo_eval_model = YOLO(yolo_path)
                 all_metrics_results["yolov8"] = {
@@ -546,10 +557,6 @@ def train_model(crop_type):
                 mb_model = build_mobilenet_model(len(class_names), pretrained=True)
                 if has_gpu: mb_model = mb_model.cuda()
 
-                # [THẦY HỎI]: Hàm Loss function và Optimizer sử dụng ở đây là gì?
-                # [TRẢ LỜI]:
-                # - Loss function: CrossEntropyLoss (Chuyên dụng cho phân loại đa lớp).
-                # - Optimizer: Adam với Learning rate 0.001 giúp tối ưu hóa trọng số hiệu quả.
                 criterion = nn.CrossEntropyLoss()
                 optimizer = optim.Adam(mb_model.parameters(), lr=0.001)
 
@@ -560,12 +567,11 @@ def train_model(crop_type):
                     for batch_idx, (inputs, labels) in enumerate(train_loader):
                         if has_gpu: inputs, labels = inputs.cuda(), labels.cuda()
 
-                        # 3 DÒNG HUẤN LUYỆN CỐT LÕI:
-                        optimizer.zero_grad()          # 1. Xóa sạch gradient tích lũy từ bước trước
-                        outputs = mb_model(inputs)     # 2. Forward pass: Đưa ảnh qua mô hình lấy dự đoán
-                        loss = criterion(outputs, labels) # Tính toán độ lỗi (Loss)
-                        loss.backward()                # 3. Backpropagation: Lan truyền ngược tính đạo hàm
-                        optimizer.step()               # Cập nhật trọng số mô hình
+                        optimizer.zero_grad()
+                        outputs = mb_model(inputs)
+                        loss = criterion(outputs, labels)
+                        loss.backward()
+                        optimizer.step()
 
                         running_loss += loss.item() * inputs.size(0)
                         _, preds = torch.max(outputs, 1)
@@ -581,7 +587,6 @@ def train_model(crop_type):
 
                 torch.save(mb_model.cpu().state_dict(), mobilenet_path)
 
-                # Đánh giá MobileNetV2 trên cả 3 tập Train, Val, Test
                 save_status(crop_type, "running", 88, "📈 Đánh giá MobileNetV2...", "📈 Đang tính toán Confusion Matrix & Metrics cho MobileNetV2...")
                 mb_eval_model = build_mobilenet_model(len(class_names), pretrained=False)
                 mb_eval_model.load_state_dict(torch.load(mobilenet_path, map_location=torch.device('cpu')))
@@ -597,7 +602,6 @@ def train_model(crop_type):
                 gc.collect()
                 if torch.cuda.is_available(): torch.cuda.empty_cache()
 
-            # 4. Xuất file JSON chứa toàn bộ dữ liệu báo cáo
             with open(metrics_path, 'w', encoding='utf-8') as f:
                 json.dump(all_metrics_results, f, ensure_ascii=False, indent=2)
 
@@ -633,15 +637,19 @@ def predict(crop_type):
         return jsonify({'error': f'Chưa có mô hình AI cho {CROPS_INFO[crop_type]["name"]}! Vui lòng huấn luyện trước.'}), 400
 
     try:
-        image = Image.open(file.stream).convert('RGB')
-        # Thu nhỏ ảnh chụp độ phân giải cao từ camera điện thoại về 224x224 ngay từ đầu
-        image = image.resize((224, 224))
+        image = Image.open(file.stream)
+        # Tự động xoay đúng chiều theo dữ liệu EXIF của camera điện thoại
+        image = ImageOps.exif_transpose(image).convert('RGB')
+        # Chỉ giới hạn cạnh tối đa 1024px (giữ nguyên tỷ lệ, dùng LANCZOS sắc nét)
+        # Không ép méo về 224x224 ngay từ đầu để cả YOLOv8 và MobileNetV2 tự tiền xử lý chuẩn xác
+        if max(image.size) > 1024:
+            image.thumbnail((1024, 1024), LANCZOS_RESAMPLE)
     except Exception:
         return jsonify({'error': 'File tải lên không phải hình ảnh hợp lệ!'}), 400
 
     results_detail = {}
 
-    # Dự đoán bằng YOLOv8
+    # Dự đoán bằng YOLOv8 (tự động letterbox giữ tỷ lệ)
     if has_yolo:
         try:
             y_model = YOLO(yolo_path)
@@ -655,7 +663,7 @@ def predict(crop_type):
         except Exception as e:
             results_detail['yolov8_error'] = str(e)
 
-    # Dự đoán bằng MobileNetV2
+    # Dự đoán bằng MobileNetV2 (dùng SmartResize giữ tỷ lệ & LANCZOS đồng bộ với lúc train)
     if has_mobilenet:
         try:
             with open(classes_path, 'r', encoding='utf-8') as f:
@@ -668,7 +676,7 @@ def predict(crop_type):
             tensor = eval_transforms(image).unsqueeze(0)
             with torch.no_grad():
                 outputs = mb_model(tensor)
-                probs = torch.nn.functional.softmax(outputs[0], dim=0) # Dùng Softmax đổi Logits ra % xác suất
+                probs = torch.nn.functional.softmax(outputs[0], dim=0)
                 conf, idx = torch.max(probs, 0)
 
             mb_disease = class_names[idx.item()]
