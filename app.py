@@ -158,7 +158,6 @@ def load_rgb_image(file_stream):
     elif img.mode != 'RGB':
         img = img.convert('RGB')
 
-    # thumbnail() luôn giữ nguyên tỷ lệ gốc (ví dụ 4000x3000 -> 640x480)
     if max(img.size) > 640:
         img.thumbnail((640, 640), LANCZOS_RESAMPLE)
     return img
@@ -174,7 +173,18 @@ def index():
 def plant_page(crop_type):
     if crop_type not in CROPS_INFO:
         return "Loại cây không hợp lệ!", 404
-    return render_template('plant.html', crop_type=crop_type, crop=CROPS_INFO[crop_type])
+
+    _, mobilenet_path, yolo_path, classes_path, _ = get_crop_paths(crop_type)
+    has_yolo = os.path.exists(yolo_path)
+    has_mobilenet = os.path.exists(mobilenet_path) and os.path.exists(classes_path)
+
+    return render_template(
+        'plant.html',
+        crop_type=crop_type,
+        crop=CROPS_INFO[crop_type],
+        has_yolo=has_yolo,
+        has_mobilenet=has_mobilenet
+    )
 
 @app.route('/api/<crop_type>/dataset-info', methods=['GET'])
 def dataset_info(crop_type):
