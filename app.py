@@ -1,16 +1,23 @@
 import os
+import sys
 import json
 import gc
+import ctypes
+import threading
 
 # ==============================================================================
-# 1. CẤU HÌNH HỆ THỐNG CHO MÔI TRƯỜNG CLOUD (RENDER)
+# 1. GIỚI HẠN CPU & RAM TỐI ĐA CHO RENDER (PHẢI ĐẶT TRƯỚC KHI IMPORT TORCH/YOLO)
 # ==============================================================================
-# Ép thư mục cấu hình tạm vào /tmp để tránh lỗi phân quyền ghi trên server Linux[cite: 1]
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
 os.environ.setdefault('YOLO_CONFIG_DIR', '/tmp')
 os.environ.setdefault('MPLCONFIGDIR', '/tmp')
 
 import matplotlib
-matplotlib.use('Agg')  # Tắt giao diện đồ họa GUI tránh treo server
+matplotlib.use('Agg')
 
 import torch
 import torch.nn as nn
@@ -19,59 +26,119 @@ from PIL import Image, ImageOps
 from flask import Flask, render_template, request, jsonify
 from ultralytics import YOLO
 
-# Xác định chính xác thư mục gốc đang chứa file app.py này
+# Khóa 1 luồng CPU và tắt hoàn toàn bộ tính đạo hàm (Autograd) để tiết kiệm RAM
+torch.set_num_threads(1)
+try:
+    torch.set_num_interop_threads(1)
+except Exception:
+    pass
+torch.set_grad_enabled(False)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 DATASET_DIR = os.path.join(BASE_DIR, "dataset")
+LANCZOS_RESAMPLE = getattr(Image, 'Resampling', Image).LANCZOS
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Giới hạn ảnh tải lên 50MB
+app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # Giới hạn ảnh 20MB tránh tràn RAM
 app.config['JSON_AS_ASCII'] = False
 try:
     app.json.ensure_ascii = False
 except AttributeError:
     pass
 
-# Danh sách các loại cây trồng hỗ trợ trong hệ thống
 CROPS_INFO = {
     'ca-chua': {'name': 'Cà Chua', 'icon': '🍅', 'badge': 'bg-danger'},
     'ca-rot': {'name': 'Cà Rốt', 'icon': '🥕', 'badge': 'bg-warning text-dark'}
 }
 
 # ==============================================================================
-# 2. HÀM LẤY ĐƯỜNG DẪN TỆP MÔ HÌNH ĐÃ TRAIN (NẰM CÙNG CẤP VỚI app.py)
+# 2. HÀM GIẢI PHÓNG RAM HỆ THỐNG & BỘ NHỚ ĐỆM 1 MÔ HÌNH DUY NHẤT
 # ==============================================================================
+def free_memory():
+    """Thu gom rác Python và ép Linux (Render) trả lại RAM phân mảnh về OS"""
+    gc.collect()
+    if sys.platform.startswith('linux'):
+        try:
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except Exception:
+            pass
+
+# Chỉ giữ mô hình của 1 loại cây đang dùng trong RAM, tránh nạp lại liên tục gây sập 502
+MODEL_CACHE = {
+    "crop_type": None,
+    "yolo": None,
+    "mobilenet": None,
+    "class_names": None
+}
+INFERENCE_LOCK = threading.Lock()
+
 def get_crop_paths(crop_type):
-    """
-    Trỏ thẳng tới các tệp đã huấn luyện sẵn trong thư mục models/ nằm cạnh app.py[cite: 1, 2]:
-    - {crop_type}_mobilenet.pth : Trọng số MobileNetV2
-    - {crop_type}_yolo.pt       : Trọng số YOLOv8
-    - {crop_type}_classes.json  : Danh sách tên các loại bệnh
-    - {crop_type}_metrics.json  : Bảng điểm đánh giá (Confusion Matrix, F1, Accuracy)
-    """
     os.makedirs(MODELS_DIR, exist_ok=True)
     dataset_dir = os.path.join(DATASET_DIR, crop_type)
     mobilenet_path = os.path.join(MODELS_DIR, f"{crop_type}_mobilenet.pth")
     yolo_path = os.path.join(MODELS_DIR, f"{crop_type}_yolo.pt")
     classes_path = os.path.join(MODELS_DIR, f"{crop_type}_classes.json")
     metrics_path = os.path.join(MODELS_DIR, f"{crop_type}_metrics.json")
-
     return dataset_dir, mobilenet_path, yolo_path, classes_path, metrics_path
 
+def build_mobilenet_model(num_classes):
+    model = models.mobilenet_v2(weights=None)
+    model.classifier[1] = nn.Linear(model.last_channel, num_classes)
+    return model
+
+def get_cached_models(crop_type):
+    """Nạp mô hình của crop_type (nếu đang giữ cây khác trong RAM thì xả sạch trước)"""
+    if MODEL_CACHE["crop_type"] == crop_type:
+        return MODEL_CACHE["yolo"], MODEL_CACHE["mobilenet"], MODEL_CACHE["class_names"]
+
+    # Xả bỏ mô hình của cây cũ khỏi RAM trước khi nạp cây mới
+    MODEL_CACHE["crop_type"] = None
+    MODEL_CACHE["yolo"] = None
+    MODEL_CACHE["mobilenet"] = None
+    MODEL_CACHE["class_names"] = None
+    free_memory()
+
+    _, mobilenet_path, yolo_path, classes_path, _ = get_crop_paths(crop_type)
+
+    y_model = None
+    if os.path.exists(yolo_path):
+        y_model = YOLO(yolo_path)
+
+    mb_model = None
+    class_names = None
+    if os.path.exists(mobilenet_path) and os.path.exists(classes_path):
+        with open(classes_path, 'r', encoding='utf-8') as f:
+            class_names = json.load(f)
+        mb_model = build_mobilenet_model(len(class_names))
+        try:
+            state_dict = torch.load(mobilenet_path, map_location='cpu', weights_only=True)
+        except TypeError:
+            state_dict = torch.load(mobilenet_path, map_location='cpu')
+        mb_model.load_state_dict(state_dict)
+        mb_model.eval()
+        del state_dict
+
+    MODEL_CACHE["crop_type"] = crop_type
+    MODEL_CACHE["yolo"] = y_model
+    MODEL_CACHE["mobilenet"] = mb_model
+    MODEL_CACHE["class_names"] = class_names
+    free_memory()
+
+    return y_model, mb_model, class_names
+
 # ==============================================================================
-# 3. TIỀN XỬ LÝ ẢNH & KHỞI TẠO KHUNG MÔ HÌNH MOBILENETV2
+# 3. TIỀN XỬ LÝ ẢNH NHẸ RAM
 # ==============================================================================
 eval_transforms = transforms.Compose([
-    transforms.Resize((224, 224)),
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
 def load_rgb_image(file_stream):
-    """
-    Đọc ảnh chuẩn xác: tự động xoay đúng chiều EXIF và xử lý nền trong suốt (PNG/WebP)
-    thành nền xám sáng thay vì nền đen kịt khi tải ảnh từ mạng.
-    """
+    """Đọc ảnh, xoay đúng hướng EXIF và thu nhỏ cạnh tối đa 640px để tiết kiệm RAM"""
     img = Image.open(file_stream)
     img = ImageOps.exif_transpose(img)
     if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
@@ -80,19 +147,13 @@ def load_rgb_image(file_stream):
         img = Image.alpha_composite(bg, rgba).convert('RGB')
     elif img.mode != 'RGB':
         img = img.convert('RGB')
+
+    if max(img.size) > 640:
+        img.thumbnail((640, 640), LANCZOS_RESAMPLE)
     return img
 
-def build_mobilenet_model(num_classes):
-    """
-    Khởi tạo khung MobileNetV2 rỗng (weights=None) để nạp trực tiếp tệp .pth đã train,
-    không tải lại trọng số từ Internet giúp tiết kiệm RAM tối đa trên Render.
-    """
-    model = models.mobilenet_v2(weights=None)
-    model.classifier[1] = nn.Linear(model.last_channel, num_classes)
-    return model
-
 # ==============================================================================
-# 4. ROUTE GIAO DIỆN WEB (FLASK)[cite: 1, 2]
+# 4. ROUTE GIAO DIỆN WEB & API
 # ==============================================================================
 @app.route('/')
 def index():
@@ -104,12 +165,8 @@ def plant_page(crop_type):
         return "Loại cây không hợp lệ!", 404
     return render_template('plant.html', crop_type=crop_type, crop=CROPS_INFO[crop_type])
 
-# ==============================================================================
-# 5. API KIỂM TRA TRẠNG THÁI MÔ HÌNH & BÁO CÁO METRICS CÓ SẴN
-# ==============================================================================
 @app.route('/api/<crop_type>/dataset-info', methods=['GET'])
 def dataset_info(crop_type):
-    """Kiểm tra các tệp mô hình đã có sẵn trong thư mục models/ hay chưa[cite: 1, 2]"""
     dataset_dir, mobilenet_path, yolo_path, classes_path, metrics_path = get_crop_paths(crop_type)
 
     classes_info = {}
@@ -119,7 +176,6 @@ def dataset_info(crop_type):
             if os.path.isdir(sub_path):
                 classes_info[sub] = len(os.listdir(sub_path))
     elif os.path.exists(classes_path):
-        # Nếu không đẩy thư mục dataset lên Render, lấy danh sách tên bệnh từ file classes.json
         try:
             with open(classes_path, 'r', encoding='utf-8') as f:
                 for c_name in json.load(f):
@@ -145,7 +201,6 @@ def dataset_info(crop_type):
 
 @app.route('/api/<crop_type>/metrics', methods=['GET'])
 def get_metrics(crop_type):
-    """Đọc số liệu đánh giá có sẵn từ file {crop_type}_metrics.json[cite: 1, 2]"""
     _, _, _, _, metrics_path = get_crop_paths(crop_type)
     if os.path.exists(metrics_path):
         try:
@@ -157,7 +212,6 @@ def get_metrics(crop_type):
 
 @app.route('/api/<crop_type>/train-status', methods=['GET'])
 def train_status(crop_type):
-    """Trả về trạng thái sẵn sàng để giao diện plant.html không bị lỗi gọi API"""
     _, mobilenet_path, yolo_path, _, _ = get_crop_paths(crop_type)
     ready = os.path.exists(mobilenet_path) or os.path.exists(yolo_path)
     return jsonify({
@@ -176,29 +230,16 @@ def train_model(crop_type):
     return jsonify({'error': 'Bản triển khai trên Render đã khóa tính năng Train để tiết kiệm RAM. Vui lòng dùng mô hình có sẵn!'}), 400
 
 # ==============================================================================
-# 6. API CHẨN ĐOÁN BỆNH TỪ TỆP ĐÃ TRAIN (PREDICT)[cite: 1, 2]
+# 5. API CHẨN ĐOÁN BỆNH (ĐÃ TỐI ƯU KHÓA LUỒNG & GIẢI PHÓNG RAM SAU MỖI LƯỢT)
 # ==============================================================================
 @app.route('/api/<crop_type>/predict', methods=['POST'])
 def predict(crop_type):
-    """
-    Nạp tệp trọng số từ thư mục models/ (nằm cùng cấp với app.py)
-    và chạy dự đoán trên ảnh người dùng tải lên[cite: 1, 2].
-    """
     if crop_type not in CROPS_INFO:
         return jsonify({'error': 'Loại cây không hợp lệ!'}), 400
 
-    _, mobilenet_path, yolo_path, classes_path, _ = get_crop_paths(crop_type)
     file = request.files.get('file')
     if not file:
         return jsonify({'error': 'Vui lòng chọn ảnh để chẩn đoán!'}), 400
-
-    has_mobilenet = os.path.exists(mobilenet_path) and os.path.exists(classes_path)
-    has_yolo = os.path.exists(yolo_path)
-
-    if not has_mobilenet and not has_yolo:
-        return jsonify({
-            'error': f'Không tìm thấy tệp mô hình trong thư mục models/ cho {CROPS_INFO[crop_type]["name"]}!'
-        }), 404
 
     try:
         image = load_rgb_image(file.stream)
@@ -207,45 +248,47 @@ def predict(crop_type):
 
     results_detail = {}
 
-    # 1. Chẩn đoán bằng YOLOv8 từ tệp models/{crop_type}_yolo.pt[cite: 1, 2]
-    if has_yolo:
+    # Khóa tuần tự để không bao giờ chạy 2 ảnh cùng lúc gây tràn RAM 512MB
+    with INFERENCE_LOCK:
         try:
-            y_model = YOLO(yolo_path)
-            y_res = y_model(image, verbose=False)[0]
-            top1_idx = int(y_res.probs.top1)
-            y_disease = y_res.names[top1_idx]
-            y_conf = round(float(y_res.probs.top1conf.item()) * 100, 2)
-            results_detail['yolov8'] = {'disease': y_disease, 'confidence': y_conf}
-            del y_model, y_res
-            gc.collect()
-        except Exception as e:
-            results_detail['yolov8_error'] = str(e)
+            y_model, mb_model, class_names = get_cached_models(crop_type)
 
-    # 2. Chẩn đoán bằng MobileNetV2 từ tệp models/{crop_type}_mobilenet.pth[cite: 1, 2]
-    if has_mobilenet:
-        try:
-            with open(classes_path, 'r', encoding='utf-8') as f:
-                class_names = json.load(f)
+            if y_model is None and mb_model is None:
+                return jsonify({
+                    'error': f'Không tìm thấy tệp mô hình trong thư mục models/ cho {CROPS_INFO[crop_type]["name"]}!'
+                }), 404
 
-            mb_model = build_mobilenet_model(len(class_names))
-            mb_model.load_state_dict(torch.load(mobilenet_path, map_location=torch.device('cpu')))
-            mb_model.eval()
+            # 1. Dự đoán bằng YOLOv8
+            if y_model is not None:
+                try:
+                    y_res = y_model(image, imgsz=224, verbose=False)[0]
+                    top1_idx = int(y_res.probs.top1)
+                    y_disease = y_res.names[top1_idx]
+                    y_conf = round(float(y_res.probs.top1conf.item()) * 100, 2)
+                    results_detail['yolov8'] = {'disease': y_disease, 'confidence': y_conf}
+                    del y_res
+                except Exception as e:
+                    results_detail['yolov8_error'] = str(e)
 
-            tensor = eval_transforms(image).unsqueeze(0)
-            with torch.no_grad():
-                outputs = mb_model(tensor)
-                probs = torch.nn.functional.softmax(outputs[0], dim=0)
-                conf, idx = torch.max(probs, 0)
+            # 2. Dự đoán bằng MobileNetV2
+            if mb_model is not None and class_names:
+                try:
+                    tensor = eval_transforms(image).unsqueeze(0)
+                    outputs = mb_model(tensor)
+                    probs = torch.nn.functional.softmax(outputs[0], dim=0)
+                    conf, idx = torch.max(probs, 0)
 
-            mb_disease = class_names[idx.item()]
-            mb_conf = round(conf.item() * 100, 2)
-            results_detail['mobilenet'] = {'disease': mb_disease, 'confidence': mb_conf}
-            del mb_model, tensor, outputs, probs
-            gc.collect()
-        except Exception as e:
-            results_detail['mobilenet_error'] = str(e)
+                    mb_disease = class_names[idx.item()]
+                    mb_conf = round(conf.item() * 100, 2)
+                    results_detail['mobilenet'] = {'disease': mb_disease, 'confidence': mb_conf}
+                    del tensor, outputs, probs
+                except Exception as e:
+                    results_detail['mobilenet_error'] = str(e)
+        finally:
+            del image
+            free_memory()
 
-    # 3. Tổng hợp kết quả chẩn đoán[cite: 1, 2]
+    # Tổng hợp kết quả chẩn đoán
     final_disease, final_confidence = "", 0.0
 
     if 'yolov8' in results_detail and 'mobilenet' in results_detail:
