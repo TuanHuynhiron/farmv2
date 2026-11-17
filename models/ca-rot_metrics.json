@@ -1,0 +1,300 @@
+{
+  "dataset_split_info": {
+    "train_total": 2140,
+    "val_total": 611,
+    "test_total": 307,
+    "per_class": {
+      "lá khỏe": {
+        "train": 712,
+        "val": 203,
+        "test": 103,
+        "total": 1018
+      },
+      "phấn trắng": {
+        "train": 714,
+        "val": 204,
+        "test": 102,
+        "total": 1020
+      },
+      "đóm lá": {
+        "train": 714,
+        "val": 204,
+        "test": 102,
+        "total": 1020
+      }
+    }
+  },
+  "class_names": [
+    "lá khỏe",
+    "phấn trắng",
+    "đóm lá"
+  ],
+  "yolov8": {
+    "train": {
+      "accuracy": 98.46,
+      "precision": 98.47,
+      "recall": 98.46,
+      "f1_score": 98.46,
+      "confusion_matrix": [
+        [
+          712,
+          0,
+          0
+        ],
+        [
+          0,
+          692,
+          22
+        ],
+        [
+          0,
+          11,
+          703
+        ]
+      ],
+      "per_class": {
+        "lá khỏe": {
+          "precision": 100.0,
+          "recall": 100.0,
+          "f1_score": 100.0,
+          "samples": 712
+        },
+        "phấn trắng": {
+          "precision": 98.44,
+          "recall": 96.92,
+          "f1_score": 97.67,
+          "samples": 714
+        },
+        "đóm lá": {
+          "precision": 96.97,
+          "recall": 98.46,
+          "f1_score": 97.71,
+          "samples": 714
+        }
+      },
+      "total_samples": 2140
+    },
+    "val": {
+      "accuracy": 98.85,
+      "precision": 98.89,
+      "recall": 98.86,
+      "f1_score": 98.86,
+      "confusion_matrix": [
+        [
+          203,
+          0,
+          0
+        ],
+        [
+          0,
+          197,
+          7
+        ],
+        [
+          0,
+          0,
+          204
+        ]
+      ],
+      "per_class": {
+        "lá khỏe": {
+          "precision": 100.0,
+          "recall": 100.0,
+          "f1_score": 100.0,
+          "samples": 203
+        },
+        "phấn trắng": {
+          "precision": 100.0,
+          "recall": 96.57,
+          "f1_score": 98.25,
+          "samples": 204
+        },
+        "đóm lá": {
+          "precision": 96.68,
+          "recall": 100.0,
+          "f1_score": 98.31,
+          "samples": 204
+        }
+      },
+      "total_samples": 611
+    },
+    "test": {
+      "accuracy": 98.37,
+      "precision": 98.37,
+      "recall": 98.37,
+      "f1_score": 98.37,
+      "confusion_matrix": [
+        [
+          103,
+          0,
+          0
+        ],
+        [
+          0,
+          100,
+          2
+        ],
+        [
+          0,
+          3,
+          99
+        ]
+      ],
+      "per_class": {
+        "lá khỏe": {
+          "precision": 100.0,
+          "recall": 100.0,
+          "f1_score": 100.0,
+          "samples": 103
+        },
+        "phấn trắng": {
+          "precision": 97.09,
+          "recall": 98.04,
+          "f1_score": 97.56,
+          "samples": 102
+        },
+        "đóm lá": {
+          "precision": 98.02,
+          "recall": 97.06,
+          "f1_score": 97.54,
+          "samples": 102
+        }
+      },
+      "total_samples": 307
+    }
+  },
+  "mobilenet": {
+    "train": {
+      "accuracy": 98.6,
+      "precision": 98.63,
+      "recall": 98.6,
+      "f1_score": 98.6,
+      "confusion_matrix": [
+        [
+          712,
+          0,
+          0
+        ],
+        [
+          0,
+          688,
+          26
+        ],
+        [
+          0,
+          4,
+          710
+        ]
+      ],
+      "per_class": {
+        "lá khỏe": {
+          "precision": 100.0,
+          "recall": 100.0,
+          "f1_score": 100.0,
+          "samples": 712
+        },
+        "phấn trắng": {
+          "precision": 99.42,
+          "recall": 96.36,
+          "f1_score": 97.87,
+          "samples": 714
+        },
+        "đóm lá": {
+          "precision": 96.47,
+          "recall": 99.44,
+          "f1_score": 97.93,
+          "samples": 714
+        }
+      },
+      "total_samples": 2140
+    },
+    "val": {
+      "accuracy": 98.04,
+      "precision": 98.15,
+      "recall": 98.04,
+      "f1_score": 98.04,
+      "confusion_matrix": [
+        [
+          203,
+          0,
+          0
+        ],
+        [
+          0,
+          192,
+          12
+        ],
+        [
+          0,
+          0,
+          204
+        ]
+      ],
+      "per_class": {
+        "lá khỏe": {
+          "precision": 100.0,
+          "recall": 100.0,
+          "f1_score": 100.0,
+          "samples": 203
+        },
+        "phấn trắng": {
+          "precision": 100.0,
+          "recall": 94.12,
+          "f1_score": 96.97,
+          "samples": 204
+        },
+        "đóm lá": {
+          "precision": 94.44,
+          "recall": 100.0,
+          "f1_score": 97.14,
+          "samples": 204
+        }
+      },
+      "total_samples": 611
+    },
+    "test": {
+      "accuracy": 98.7,
+      "precision": 98.74,
+      "recall": 98.69,
+      "f1_score": 98.69,
+      "confusion_matrix": [
+        [
+          103,
+          0,
+          0
+        ],
+        [
+          0,
+          98,
+          4
+        ],
+        [
+          0,
+          0,
+          102
+        ]
+      ],
+      "per_class": {
+        "lá khỏe": {
+          "precision": 100.0,
+          "recall": 100.0,
+          "f1_score": 100.0,
+          "samples": 103
+        },
+        "phấn trắng": {
+          "precision": 100.0,
+          "recall": 96.08,
+          "f1_score": 98.0,
+          "samples": 102
+        },
+        "đóm lá": {
+          "precision": 96.23,
+          "recall": 100.0,
+          "f1_score": 98.08,
+          "samples": 102
+        }
+      },
+      "total_samples": 307
+    }
+  }
+}
