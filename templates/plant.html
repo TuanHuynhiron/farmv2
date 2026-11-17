@@ -14,13 +14,78 @@
             border-radius: 6px;
             border: 1px solid #dee2e6;
         }
+
+        /* Hiệu ứng nút bấm nổi 3D và lún sâu rõ rệt khi nhấn */
+        .btn-3d {
+            position: relative;
+            transition: transform 0.12s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.12s ease, filter 0.12s ease !important;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        .btn-3d:active:not(:disabled),
+        .btn-3d.is-pressed:not(:disabled) {
+            transform: translateY(3px) scale(0.96) !important;
+            filter: brightness(0.9);
+        }
+
+        .btn-primary.btn-3d {
+            box-shadow: 0 4px 0 #0a58ca, 0 6px 12px rgba(13, 110, 253, 0.25);
+        }
+        .btn-primary.btn-3d:active:not(:disabled),
+        .btn-primary.btn-3d.is-pressed:not(:disabled) {
+            box-shadow: 0 1px 0 #0a58ca, 0 2px 4px rgba(13, 110, 253, 0.2) !important;
+        }
+
+        .btn-success.btn-3d {
+            box-shadow: 0 4px 0 #146c43, 0 6px 12px rgba(25, 135, 84, 0.25);
+        }
+        .btn-success.btn-3d:active:not(:disabled),
+        .btn-success.btn-3d.is-pressed:not(:disabled) {
+            box-shadow: 0 1px 0 #146c43, 0 2px 4px rgba(25, 135, 84, 0.2) !important;
+        }
+
+        .btn-danger.btn-3d {
+            box-shadow: 0 4px 0 #b02a37, 0 6px 12px rgba(220, 53, 69, 0.25);
+        }
+        .btn-danger.btn-3d:active:not(:disabled),
+        .btn-danger.btn-3d.is-pressed:not(:disabled) {
+            box-shadow: 0 1px 0 #b02a37, 0 2px 4px rgba(220, 53, 69, 0.2) !important;
+        }
+
+        .btn-secondary.btn-3d {
+            box-shadow: 0 3px 0 #495057, 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        .btn-secondary.btn-3d:active:not(:disabled),
+        .btn-secondary.btn-3d.is-pressed:not(:disabled) {
+            box-shadow: 0 1px 0 #495057, 0 1px 3px rgba(0, 0, 0, 0.12) !important;
+        }
+
+        .btn-outline-secondary.btn-3d {
+            background-color: #ffffff;
+            box-shadow: 0 4px 0 #adb5bd, 0 4px 10px rgba(0, 0, 0, 0.08);
+        }
+        .btn-outline-secondary.btn-3d:active:not(:disabled),
+        .btn-outline-secondary.btn-3d.is-pressed:not(:disabled) {
+            box-shadow: 0 1px 0 #adb5bd, 0 2px 4px rgba(0, 0, 0, 0.08) !important;
+            background-color: #e9ecef;
+        }
+
+        .btn-outline-light.btn-3d {
+            box-shadow: 0 3px 0 rgba(255, 255, 255, 0.35);
+        }
+        .btn-outline-light.btn-3d:active:not(:disabled),
+        .btn-outline-light.btn-3d.is-pressed:not(:disabled) {
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+        }
     </style>
 </head>
 <body class="bg-light">
     <div class="container py-4">
         <!-- Nút Quay về trang chủ -->
         <div class="mb-3">
-            <a href="/" class="btn btn-sm btn-secondary">← Quay lại Trang Chủ Khu Vườn</a>
+            <a href="/" onclick="goBack(event, this, '/')" class="btn btn-sm btn-secondary btn-3d fw-semibold px-3">
+                ← Quay lại Trang Chủ Khu Vườn
+            </a>
         </div>
 
         <h2 class="text-center text-success fw-bold mb-4">
@@ -37,19 +102,38 @@
                     <div class="card-body d-flex flex-column justify-content-between">
                         <form id="predictForm">
                             <div class="mb-3">
-                                <label class="form-label fw-bold">Chọn ảnh lá {{ crop.name | lower }} cần kiểm tra:</label>
-                                <input type="file" id="predictFile" class="form-control" accept="image/*" required>
+                                <label class="form-label fw-bold">Chụp hoặc chọn ảnh lá {{ crop.name | lower }} cần kiểm tra:</label>
+                                
+                                <!-- 2 input ẩn: 1 mở thẳng Camera sau điện thoại, 1 mở Thư viện ảnh -->
+                                <input type="file" id="predictCamera" accept="image/*" capture="environment" class="d-none">
+                                <input type="file" id="predictGallery" accept="image/*" class="d-none">
+
+                                <!-- 2 nút bấm trực quan có phản hồi nhấn -->
+                                <div class="row g-2 mt-1">
+                                    <div class="col-6">
+                                        <button type="button" id="btnOpenCamera" class="btn btn-success btn-3d w-100 fw-bold py-2">
+                                            📷 Chụp ảnh
+                                        </button>
+                                    </div>
+                                    <div class="col-6">
+                                        <button type="button" id="btnOpenGallery" class="btn btn-outline-secondary btn-3d w-100 fw-bold py-2 text-dark">
+                                            🖼️ Thư viện
+                                        </button>
+                                    </div>
+                                </div>
                                 
                                 <div id="predictPreview" class="mt-3 text-center d-none">
-                                    <p class="text-muted small mb-1">Ảnh đã chọn:</p>
-                                    <img id="predictImgView" src="" class="img-fluid rounded border shadow-sm" style="max-height: 180px;">
+                                    <p class="text-muted small mb-1">Ảnh đã chọn (<span id="predictSourceTag" class="fw-semibold text-success"></span>):</p>
+                                    <img id="predictImgView" src="" class="img-fluid rounded border shadow-sm" style="max-height: 200px;">
                                 </div>
                             </div>
-                            <button type="submit" class="btn btn-primary w-100">Chẩn đoán ngay</button>
+                            <button type="submit" id="btnPredict" class="btn btn-primary btn-3d w-100 fw-bold py-2">
+                                🔍 Chẩn đoán ngay
+                            </button>
                         </form>
 
                         <div id="predictResult" class="mt-3 d-none">
-                            <div class="alert alert-info m-0">
+                            <div class="alert alert-info m-0 shadow-sm">
                                 <h5 class="m-0">Bệnh chẩn đoán: <span id="resDisease" class="text-danger fw-bold"></span></h5>
                                 <p class="mt-2 mb-0">Độ tin cậy của AI: <span id="resConfidence" class="fw-bold"></span>%</p>
                                 <div id="modelDetailsBox" class="mt-2 pt-2 border-top text-muted small"></div>
@@ -68,9 +152,9 @@
                     <div class="card-body">
                         <form id="addSampleForm">
                             <div class="mb-3">
-                                <label class="form-label fw-bold">Chọn tập ảnh mẫu (Giữ **Ctrl** hoặc **Shift** để chọn nhiều ảnh):</label>
+                                <label class="form-label fw-bold">Chọn tập ảnh mẫu (Có thể chọn nhiều ảnh cùng lúc):</label>
                                 <input type="file" id="sampleFiles" class="form-control" accept="image/*" multiple required>
-                                <div class="form-text">Bạn có thể chọn nhiều ảnh cùng lúc.</div>
+                                <div class="form-text">Giữ <b>Ctrl</b> hoặc <b>Shift</b> trên máy tính, hoặc nhấn giữ để chọn nhiều ảnh trên điện thoại.</div>
 
                                 <div id="batchPreviewContainer" class="mt-3 d-none">
                                     <p class="text-muted small mb-1">Các ảnh đã chọn (<span id="batchCount" class="fw-bold">0</span> ảnh):</p>
@@ -82,7 +166,9 @@
                                 <label class="form-label fw-bold">Nhập tên/nhãn bệnh tương ứng:</label>
                                 <input type="text" id="diseaseName" class="form-control" placeholder="Ví dụ: Đốm lá, Khỏe mạnh..." required>
                             </div>
-                            <button type="submit" id="btnUploadBatch" class="btn btn-success w-100">Lưu vào tập dữ liệu {{ crop.name }}</button>
+                            <button type="submit" id="btnUploadBatch" class="btn btn-success btn-3d w-100 fw-bold py-2">
+                                💾 Lưu vào tập dữ liệu {{ crop.name }}
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -93,7 +179,9 @@
                 <div class="card shadow-sm border-dark">
                     <div class="card-header bg-dark text-white fw-bold fs-5 d-flex justify-content-between align-items-center">
                         <span>🤖 3. Huấn Luyện AI riêng cho {{ crop.name }}</span>
-                        <button class="btn btn-sm btn-outline-light" onclick="loadDatasetInfo()">🔄 Cập nhật danh sách</button>
+                        <button type="button" id="btnRefreshDataset" class="btn btn-sm btn-outline-light btn-3d" onclick="loadDatasetInfo(this)">
+                            🔄 Cập nhật danh sách
+                        </button>
                     </div>
                     <div class="card-body">
                         <div class="row">
@@ -116,10 +204,12 @@
                                     <label class="form-label fw-bold">Số chu kỳ huấn luyện (Epochs):</label>
                                     <input type="number" id="epochInput" class="form-control" value="5" min="1" max="50">
                                 </div>
-                                <button id="btnTrain" class="btn btn-danger w-100 fw-bold" onclick="startTraining()">🚀 Huấn Luyện AI {{ crop.name }}</button>
+                                <button type="button" id="btnTrain" class="btn btn-danger btn-3d w-100 fw-bold py-2" onclick="startTraining()">
+                                    🚀 Huấn Luyện AI {{ crop.name }}
+                                </button>
                             </div>
 
-                            <div class="col-md-7">
+                            <div class="col-md-7 mt-3 mt-md-0">
                                 <h6>Nhật ký & Tiến trình huấn luyện:</h6>
 
                                 <div id="progressBox" class="mb-3 p-3 bg-white border rounded d-none">
@@ -144,20 +234,66 @@
     <script>
         const CROP_TYPE = "{{ crop_type }}";
         let pollTimer = null;
+        let selectedPredictFile = null;
 
-        document.addEventListener("DOMContentLoaded", loadDatasetInfo);
+        // Hiệu ứng lún nút + rung nhẹ cho tất cả các nút .btn-3d khi chạm trên điện thoại
+        function animateButtonPress(btn) {
+            try { if (navigator.vibrate) navigator.vibrate(18); } catch (e) {}
+            if (!btn) return;
+            btn.classList.add('is-pressed');
+            setTimeout(() => btn.classList.remove('is-pressed'), 180);
+        }
 
-        document.getElementById('predictFile').addEventListener('change', (e) => {
-            const file = e.target.files[0];
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-3d');
+            if (btn && !btn.disabled) {
+                animateButtonPress(btn);
+            }
+        });
+
+        function goBack(e, btn, url) {
+            e.preventDefault();
+            animateButtonPress(btn);
+            btn.innerText = '⏳ Đang quay lại...';
+            setTimeout(() => { window.location.href = url; }, 150);
+        }
+
+        document.addEventListener("DOMContentLoaded", () => loadDatasetInfo());
+
+        // Bấm nút mở Camera
+        document.getElementById('btnOpenCamera').addEventListener('click', () => {
+            const camInput = document.getElementById('predictCamera');
+            camInput.value = '';
+            setTimeout(() => camInput.click(), 90);
+        });
+
+        // Bấm nút mở Thư viện
+        document.getElementById('btnOpenGallery').addEventListener('click', () => {
+            const galInput = document.getElementById('predictGallery');
+            galInput.value = '';
+            setTimeout(() => galInput.click(), 90);
+        });
+
+        function handlePredictFile(file, sourceLabel) {
             const previewDiv = document.getElementById('predictPreview');
             const imgView = document.getElementById('predictImgView');
+            const sourceTag = document.getElementById('predictSourceTag');
 
             if (file) {
+                selectedPredictFile = file;
                 imgView.src = URL.createObjectURL(file);
+                sourceTag.innerText = sourceLabel;
                 previewDiv.classList.remove('d-none');
-            } else {
-                previewDiv.classList.add('d-none');
+                document.getElementById('predictResult').classList.add('d-none');
             }
+        }
+
+        document.getElementById('predictCamera').addEventListener('change', (e) => {
+            handlePredictFile(e.target.files[0], 'Từ Camera');
+        });
+
+        document.getElementById('predictGallery').addEventListener('change', (e) => {
+            handlePredictFile(e.target.files[0], 'Từ Thư viện');
         });
 
         document.getElementById('sampleFiles').addEventListener('change', (e) => {
@@ -183,24 +319,33 @@
             }
         });
 
-        async function loadDatasetInfo() {
-            const res = await fetch(`/api/${CROP_TYPE}/dataset-info`);
-            const data = await res.json();
-            const list = document.getElementById('datasetList');
-            list.innerHTML = '';
-
-            const keys = Object.keys(data.classes);
-            if (keys.length === 0) {
-                list.innerHTML = '<li class="list-group-item text-muted">Chưa có ảnh nào trong tập dữ liệu.</li>';
-                return;
+        async function loadDatasetInfo(btnEl = null) {
+            if (btnEl) {
+                btnEl.innerText = '⏳ Đang tải...';
             }
+            try {
+                const res = await fetch(`/api/${CROP_TYPE}/dataset-info`);
+                const data = await res.json();
+                const list = document.getElementById('datasetList');
+                list.innerHTML = '';
 
-            keys.forEach(cls => {
-                list.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center">
-                    <b>${cls}</b>
-                    <span class="badge bg-primary rounded-pill">${data.classes[cls]} ảnh</span>
-                </li>`;
-            });
+                const keys = Object.keys(data.classes);
+                if (keys.length === 0) {
+                    list.innerHTML = '<li class="list-group-item text-muted">Chưa có ảnh nào trong tập dữ liệu.</li>';
+                } else {
+                    keys.forEach(cls => {
+                        list.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center">
+                            <b>${cls}</b>
+                            <span class="badge bg-primary rounded-pill">${data.classes[cls]} ảnh</span>
+                        </li>`;
+                    });
+                }
+            } finally {
+                if (btnEl) {
+                    btnEl.innerText = '✓ Đã cập nhật';
+                    setTimeout(() => { btnEl.innerText = '🔄 Cập nhật danh sách'; }, 900);
+                }
+            }
         }
 
         document.getElementById('addSampleForm').addEventListener('submit', async (e) => {
@@ -224,49 +369,69 @@
                 formData.append('files', files[i]);
             }
 
-            const res = await fetch(`/api/${CROP_TYPE}/add-sample`, { method: 'POST', body: formData });
-            const data = await res.json();
+            try {
+                const res = await fetch(`/api/${CROP_TYPE}/add-sample`, { method: 'POST', body: formData });
+                const data = await res.json();
 
-            if (res.ok) {
-                alert(data.message);
-                document.getElementById('addSampleForm').reset();
-                document.getElementById('batchPreviewContainer').classList.add('d-none');
-                loadDatasetInfo();
-            } else {
-                alert(data.error);
+                if (res.ok) {
+                    alert(data.message);
+                    document.getElementById('addSampleForm').reset();
+                    document.getElementById('batchPreviewContainer').classList.add('d-none');
+                    loadDatasetInfo();
+                } else {
+                    alert(data.error);
+                }
+            } catch (err) {
+                alert("Lỗi kết nối khi tải ảnh mẫu!");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "💾 Lưu vào tập dữ liệu {{ crop.name }}";
             }
-
-            btn.disabled = false;
-            btn.innerText = "Lưu vào tập dữ liệu";
         });
 
         document.getElementById('predictForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const formData = new FormData();
-            formData.append('file', document.getElementById('predictFile').files[0]);
+            if (!selectedPredictFile) {
+                alert("Vui lòng bấm '📷 Chụp ảnh' hoặc chọn ảnh từ '🖼️ Thư viện' trước!");
+                return;
+            }
 
+            const btn = document.getElementById('btnPredict');
             const resDiv = document.getElementById('predictResult');
+
+            btn.disabled = true;
+            btn.innerText = "⏳ AI đang phân tích ảnh...";
             resDiv.classList.add('d-none');
 
-            const res = await fetch(`/api/${CROP_TYPE}/predict`, { method: 'POST', body: formData });
-            const data = await res.json();
+            const formData = new FormData();
+            formData.append('file', selectedPredictFile);
 
-            if (res.ok) {
-                document.getElementById('resDisease').innerText = data.disease;
-                document.getElementById('resConfidence').innerText = data.confidence;
+            try {
+                const res = await fetch(`/api/${CROP_TYPE}/predict`, { method: 'POST', body: formData });
+                const data = await res.json();
 
-                let detailsHTML = "";
-                if (data.details.yolov8) {
-                    detailsHTML += `<div>🚀 <b>YOLOv8:</b> ${data.details.yolov8.disease} (${data.details.yolov8.confidence}%)</div>`;
+                if (res.ok) {
+                    document.getElementById('resDisease').innerText = data.disease;
+                    document.getElementById('resConfidence').innerText = data.confidence;
+
+                    let detailsHTML = "";
+                    if (data.details.yolov8) {
+                        detailsHTML += `<div>🚀 <b>YOLOv8:</b> ${data.details.yolov8.disease} (${data.details.yolov8.confidence}%)</div>`;
+                    }
+                    if (data.details.mobilenet) {
+                        detailsHTML += `<div>🧠 <b>MobileNetV2:</b> ${data.details.mobilenet.disease} (${data.details.mobilenet.confidence}%)</div>`;
+                    }
+                    document.getElementById('modelDetailsBox').innerHTML = detailsHTML;
+
+                    resDiv.classList.remove('d-none');
+                } else {
+                    alert(data.error);
                 }
-                if (data.details.mobilenet) {
-                    detailsHTML += `<div>🧠 <b>MobileNetV2:</b> ${data.details.mobilenet.disease} (${data.details.mobilenet.confidence}%)</div>`;
-                }
-                document.getElementById('modelDetailsBox').innerHTML = detailsHTML;
-
-                resDiv.classList.remove('d-none');
-            } else {
-                alert(data.error);
+            } catch (err) {
+                alert("Không thể kết nối tới máy chủ AI!");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "🔍 Chẩn đoán ngay";
             }
         });
 
@@ -294,7 +459,7 @@
                 if (!res.ok) {
                     alert(data.error);
                     btn.disabled = false;
-                    btn.innerText = "🚀 Huấn Luyện AI";
+                    btn.innerText = "🚀 Huấn Luyện AI {{ crop.name }}";
                     return;
                 }
 
@@ -304,7 +469,7 @@
             } catch (err) {
                 logsPre.innerText = "❌ Lỗi kết nối: " + err + "\n";
                 btn.disabled = false;
-                btn.innerText = "🚀 Huấn Luyện AI";
+                btn.innerText = "🚀 Huấn Luyện AI {{ crop.name }}";
             }
         }
 
@@ -332,7 +497,7 @@
                 if (data.status === "completed" || data.status === "error") {
                     clearInterval(pollTimer);
                     btn.disabled = false;
-                    btn.innerText = "🚀 Huấn Luyện AI";
+                    btn.innerText = "🚀 Huấn Luyện AI {{ crop.name }}";
                 }
             } catch (err) {
                 console.error("Lỗi cập nhật:", err);
