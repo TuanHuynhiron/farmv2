@@ -26,7 +26,7 @@ from PIL import Image, ImageOps
 from flask import Flask, render_template, request, jsonify
 from ultralytics import YOLO
 
-# Khóa 1 luồng CPU và tắt hoàn toàn bộ tính đạo hàm (Autograd) để tiết kiệm RAM
+# Khóa 1 luồng CPU và tắt hoàn toàn tính đạo hàm (Autograd) để tiết kiệm RAM
 torch.set_num_threads(1)
 try:
     torch.set_num_interop_threads(1)
@@ -64,7 +64,6 @@ def free_memory():
         except Exception:
             pass
 
-# Chỉ giữ mô hình của 1 loại cây đang dùng trong RAM, tránh nạp lại liên tục gây sập 502
 MODEL_CACHE = {
     "crop_type": None,
     "yolo": None,
@@ -92,7 +91,6 @@ def get_cached_models(crop_type):
     if MODEL_CACHE["crop_type"] == crop_type:
         return MODEL_CACHE["yolo"], MODEL_CACHE["mobilenet"], MODEL_CACHE["class_names"]
 
-    # Xả bỏ mô hình của cây cũ khỏi RAM trước khi nạp cây mới
     MODEL_CACHE["crop_type"] = None
     MODEL_CACHE["yolo"] = None
     MODEL_CACHE["mobilenet"] = None
@@ -128,17 +126,29 @@ def get_cached_models(crop_type):
     return y_model, mb_model, class_names
 
 # ==============================================================================
-# 3. TIỀN XỬ LÝ ẢNH NHẸ RAM
+# 3. TIỀN XỬ LÝ GIỮ NGUYÊN TỶ LỆ 4:3 (KHÔNG CẮT RÌA, KHÔNG BÓP MÉO)
 # ==============================================================================
+class LetterboxPad:
+    """
+    Giữ trọn 100% khung hình 4:3 (hoặc 16:9, 3:4):
+    Thu nhỏ theo đúng tỷ lệ về cạnh dài 224px (224x168) và đệm viền xám chuẩn (114, 114, 114)
+    để đạt đúng kích thước 224x224 mà không làm biến dạng hình ảnh hay cắt mất rìa lá.
+    """
+    def __init__(self, size=224, fill=(114, 114, 114)):
+        self.size = (size, size)
+        self.fill = fill
+
+    def __call__(self, img):
+        return ImageOps.pad(img, self.size, method=LANCZOS_RESAMPLE, color=self.fill)
+
 eval_transforms = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
+    LetterboxPad(224),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
 def load_rgb_image(file_stream):
-    """Đọc ảnh, xoay đúng hướng EXIF và thu nhỏ cạnh tối đa 640px để tiết kiệm RAM"""
+    """Đọc ảnh, xoay đúng hướng EXIF và thu nhỏ giữ nguyên tỷ lệ (cạnh dài tối đa 640px) để nhẹ RAM"""
     img = Image.open(file_stream)
     img = ImageOps.exif_transpose(img)
     if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
@@ -148,6 +158,7 @@ def load_rgb_image(file_stream):
     elif img.mode != 'RGB':
         img = img.convert('RGB')
 
+    # thumbnail() luôn giữ nguyên tỷ lệ gốc (ví dụ 4000x3000 -> 640x480)
     if max(img.size) > 640:
         img.thumbnail((640, 640), LANCZOS_RESAMPLE)
     return img
@@ -248,7 +259,6 @@ def predict(crop_type):
 
     results_detail = {}
 
-    # Khóa tuần tự để không bao giờ chạy 2 ảnh cùng lúc gây tràn RAM 512MB
     with INFERENCE_LOCK:
         try:
             y_model, mb_model, class_names = get_cached_models(crop_type)
@@ -258,7 +268,7 @@ def predict(crop_type):
                     'error': f'Không tìm thấy tệp mô hình trong thư mục models/ cho {CROPS_INFO[crop_type]["name"]}!'
                 }), 404
 
-            # 1. Dự đoán bằng YOLOv8
+            # 1. Dự đoán bằng YOLOv8 (tự động letterbox giữ nguyên tỷ lệ 4:3)
             if y_model is not None:
                 try:
                     y_res = y_model(image, imgsz=224, verbose=False)[0]
@@ -270,7 +280,7 @@ def predict(crop_type):
                 except Exception as e:
                     results_detail['yolov8_error'] = str(e)
 
-            # 2. Dự đoán bằng MobileNetV2
+            # 2. Dự đoán bằng MobileNetV2 (dùng LetterboxPad giữ nguyên tỷ lệ 4:3)
             if mb_model is not None and class_names:
                 try:
                     tensor = eval_transforms(image).unsqueeze(0)
