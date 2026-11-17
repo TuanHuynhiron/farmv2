@@ -1,0 +1,300 @@
+{
+  "dataset_split_info": {
+    "train_total": 2104,
+    "val_total": 601,
+    "test_total": 302,
+    "per_class": {
+      "lá khỏe": {
+        "train": 701,
+        "val": 200,
+        "test": 101,
+        "total": 1002
+      },
+      "mốc sương": {
+        "train": 703,
+        "val": 201,
+        "test": 101,
+        "total": 1005
+      },
+      "đóm lá": {
+        "train": 700,
+        "val": 200,
+        "test": 100,
+        "total": 1000
+      }
+    }
+  },
+  "class_names": [
+    "lá khỏe",
+    "mốc sương",
+    "đóm lá"
+  ],
+  "yolov8": {
+    "train": {
+      "accuracy": 99.9,
+      "precision": 99.91,
+      "recall": 99.91,
+      "f1_score": 99.9,
+      "confusion_matrix": [
+        [
+          701,
+          0,
+          0
+        ],
+        [
+          0,
+          701,
+          2
+        ],
+        [
+          0,
+          0,
+          700
+        ]
+      ],
+      "per_class": {
+        "lá khỏe": {
+          "precision": 100.0,
+          "recall": 100.0,
+          "f1_score": 100.0,
+          "samples": 701
+        },
+        "mốc sương": {
+          "precision": 100.0,
+          "recall": 99.72,
+          "f1_score": 99.86,
+          "samples": 703
+        },
+        "đóm lá": {
+          "precision": 99.72,
+          "recall": 100.0,
+          "f1_score": 99.86,
+          "samples": 700
+        }
+      },
+      "total_samples": 2104
+    },
+    "val": {
+      "accuracy": 99.67,
+      "precision": 99.67,
+      "recall": 99.67,
+      "f1_score": 99.67,
+      "confusion_matrix": [
+        [
+          200,
+          0,
+          0
+        ],
+        [
+          0,
+          200,
+          1
+        ],
+        [
+          0,
+          1,
+          199
+        ]
+      ],
+      "per_class": {
+        "lá khỏe": {
+          "precision": 100.0,
+          "recall": 100.0,
+          "f1_score": 100.0,
+          "samples": 200
+        },
+        "mốc sương": {
+          "precision": 99.5,
+          "recall": 99.5,
+          "f1_score": 99.5,
+          "samples": 201
+        },
+        "đóm lá": {
+          "precision": 99.5,
+          "recall": 99.5,
+          "f1_score": 99.5,
+          "samples": 200
+        }
+      },
+      "total_samples": 601
+    },
+    "test": {
+      "accuracy": 100.0,
+      "precision": 100.0,
+      "recall": 100.0,
+      "f1_score": 100.0,
+      "confusion_matrix": [
+        [
+          101,
+          0,
+          0
+        ],
+        [
+          0,
+          101,
+          0
+        ],
+        [
+          0,
+          0,
+          100
+        ]
+      ],
+      "per_class": {
+        "lá khỏe": {
+          "precision": 100.0,
+          "recall": 100.0,
+          "f1_score": 100.0,
+          "samples": 101
+        },
+        "mốc sương": {
+          "precision": 100.0,
+          "recall": 100.0,
+          "f1_score": 100.0,
+          "samples": 101
+        },
+        "đóm lá": {
+          "precision": 100.0,
+          "recall": 100.0,
+          "f1_score": 100.0,
+          "samples": 100
+        }
+      },
+      "total_samples": 302
+    }
+  },
+  "mobilenet": {
+    "train": {
+      "accuracy": 98.95,
+      "precision": 98.99,
+      "recall": 98.95,
+      "f1_score": 98.95,
+      "confusion_matrix": [
+        [
+          699,
+          2,
+          0
+        ],
+        [
+          0,
+          703,
+          0
+        ],
+        [
+          1,
+          19,
+          680
+        ]
+      ],
+      "per_class": {
+        "lá khỏe": {
+          "precision": 99.86,
+          "recall": 99.71,
+          "f1_score": 99.79,
+          "samples": 701
+        },
+        "mốc sương": {
+          "precision": 97.1,
+          "recall": 100.0,
+          "f1_score": 98.53,
+          "samples": 703
+        },
+        "đóm lá": {
+          "precision": 100.0,
+          "recall": 97.14,
+          "f1_score": 98.55,
+          "samples": 700
+        }
+      },
+      "total_samples": 2104
+    },
+    "val": {
+      "accuracy": 98.17,
+      "precision": 98.25,
+      "recall": 98.17,
+      "f1_score": 98.17,
+      "confusion_matrix": [
+        [
+          200,
+          0,
+          0
+        ],
+        [
+          1,
+          200,
+          0
+        ],
+        [
+          0,
+          10,
+          190
+        ]
+      ],
+      "per_class": {
+        "lá khỏe": {
+          "precision": 99.5,
+          "recall": 100.0,
+          "f1_score": 99.75,
+          "samples": 200
+        },
+        "mốc sương": {
+          "precision": 95.24,
+          "recall": 99.5,
+          "f1_score": 97.32,
+          "samples": 201
+        },
+        "đóm lá": {
+          "precision": 100.0,
+          "recall": 95.0,
+          "f1_score": 97.44,
+          "samples": 200
+        }
+      },
+      "total_samples": 601
+    },
+    "test": {
+      "accuracy": 99.01,
+      "precision": 99.01,
+      "recall": 99.0,
+      "f1_score": 99.0,
+      "confusion_matrix": [
+        [
+          101,
+          0,
+          0
+        ],
+        [
+          0,
+          100,
+          1
+        ],
+        [
+          0,
+          2,
+          98
+        ]
+      ],
+      "per_class": {
+        "lá khỏe": {
+          "precision": 100.0,
+          "recall": 100.0,
+          "f1_score": 100.0,
+          "samples": 101
+        },
+        "mốc sương": {
+          "precision": 98.04,
+          "recall": 99.01,
+          "f1_score": 98.52,
+          "samples": 101
+        },
+        "đóm lá": {
+          "precision": 98.99,
+          "recall": 98.0,
+          "f1_score": 98.49,
+          "samples": 100
+        }
+      },
+      "total_samples": 302
+    }
+  }
+}
