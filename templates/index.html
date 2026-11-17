@@ -3,42 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Quản Lý & Chẩn Đoán Sức Khỏe Khu Vườn</title>
+    <title>Hệ Thống Chẩn Đoán Bệnh Lá Cây AI</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        /* Thẻ chọn khu vườn có độ nổi 3D và lún rõ khi chạm */
+        /* Hiệu ứng nổi khối và lún xuống khi chạm vào thẻ khu vườn */
         .garden-card {
-            transition: transform 0.14s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.14s ease, background-color 0.14s ease;
+            transition: transform 0.14s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.14s ease;
             cursor: pointer;
-            border-radius: 16px;
-            box-shadow: 0 6px 0 #d1e7dd, 0 10px 20px rgba(0, 0, 0, 0.08) !important;
             -webkit-tap-highlight-color: transparent;
             user-select: none;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08) !important;
         }
         .garden-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 10px 0 #badbcc, 0 14px 24px rgba(0, 0, 0, 0.12) !important;
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14) !important;
         }
-        .garden-card:active,
-        .garden-card.is-pressed {
-            transform: translateY(4px) scale(0.97) !important;
-            box-shadow: 0 2px 0 #badbcc, 0 4px 8px rgba(0, 0, 0, 0.1) !important;
-            background-color: #f1f8f5 !important;
+        .garden-card:active {
+            transform: scale(0.97) translateY(3px) !important;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.12) !important;
+            background-color: #f8f9fa;
         }
 
-        /* Hiệu ứng nút bấm 3D lún sâu khi nhấn */
-        .btn-3d {
-            position: relative;
-            transition: transform 0.12s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.12s ease, filter 0.12s ease !important;
-            box-shadow: 0 4px 0 #146c43, 0 6px 12px rgba(25, 135, 84, 0.25);
+        /* Hiệu ứng nút bấm nổi 3D và lún sâu khi nhấn */
+        .btn {
+            transition: transform 0.1s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.1s ease, filter 0.1s ease !important;
+            box-shadow: 0 4px 0 rgba(20, 108, 67, 0.85), 0 6px 12px rgba(0, 0, 0, 0.15);
             -webkit-tap-highlight-color: transparent;
             user-select: none;
         }
-        .btn-3d:active,
-        .btn-3d.is-pressed {
-            transform: translateY(3px) scale(0.96) !important;
-            box-shadow: 0 1px 0 #146c43, 0 2px 4px rgba(25, 135, 84, 0.2) !important;
-            filter: brightness(0.9);
+        .btn:active:not(:disabled) {
+            transform: scale(0.95) translateY(3px) !important;
+            box-shadow: 0 1px 0 rgba(20, 108, 67, 0.85), 0 2px 4px rgba(0, 0, 0, 0.15) !important;
+            filter: brightness(0.92);
         }
     </style>
 </head>
@@ -46,19 +42,17 @@
     <div class="container py-5">
         <div class="text-center mb-5">
             <h1 class="fw-bold text-success display-5">🏡 Trạm Chẩn Đoán Bệnh Lá Cây</h1>
-            <p class="lead text-muted">Vui lòng chọn khu vườn bạn muốn kiểm tra bệnh lá và huấn luyện AI</p>
+            <p class="lead text-muted">Chọn loại cây trồng để chụp ảnh và nhận diện bệnh bằng trí tuệ nhân tạo</p>
         </div>
 
         <div class="row justify-content-center g-4">
             {% for key, crop in crops.items() %}
             <div class="col-md-5 col-lg-4">
-                <div class="card h-100 border-0 garden-card text-center p-4" onclick="openGarden(this, '/plant/{{ key }}')">
+                <div class="card h-100 border-0 garden-card text-center p-4" onclick="navigateWithFeedback('/plant/{{ key }}')">
                     <div class="display-1 mb-3">{{ crop.icon }}</div>
                     <h3 class="fw-bold mb-2">Khu Vườn {{ crop.name }}</h3>
-                    <p class="text-muted small mb-4">Chẩn đoán các bệnh lý trên lá {{ crop.name | lower }} & quản lý dữ liệu huấn luyện riêng biệt.</p>
-                    <a href="/plant/{{ key }}" onclick="event.preventDefault()" class="btn btn-success btn-3d fw-bold rounded-pill py-2 mt-auto">
-                        Vào Khu Vườn
-                    </a>
+                    <p class="text-muted small mb-4">Tải ảnh hoặc chụp trực tiếp lá {{ crop.name | lower }} để hệ thống AI phân tích tình trạng bệnh.</p>
+                    <a href="/plant/{{ key }}" onclick="event.preventDefault()" class="btn btn-success fw-bold rounded-pill py-2 mt-auto">Vào Chẩn Đoán</a>
                 </div>
             </div>
             {% endfor %}
@@ -66,21 +60,9 @@
     </div>
 
     <script>
-        function openGarden(cardEl, url) {
-            // Rung phản hồi nhẹ trên điện thoại
-            try { if (navigator.vibrate) navigator.vibrate(20); } catch (e) {}
-
-            // Giữ trạng thái lún nút trong 160ms để mắt nhìn rõ hiệu ứng vừa nhấn
-            cardEl.classList.add('is-pressed');
-            const btn = cardEl.querySelector('.btn-3d');
-            if (btn) {
-                btn.classList.add('is-pressed');
-                btn.innerText = '⏳ Đang vào...';
-            }
-
-            setTimeout(() => {
-                window.location.href = url;
-            }, 160);
+        function navigateWithFeedback(url) {
+            try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) {}
+            setTimeout(() => { window.location.href = url; }, 110);
         }
     </script>
 </body>
