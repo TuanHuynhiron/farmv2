@@ -6,13 +6,39 @@
     <title>Hệ Thống Quản Lý & Chẩn Đoán Sức Khỏe Khu Vườn</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        /* Thẻ chọn khu vườn có độ nổi 3D và lún rõ khi chạm */
         .garden-card {
-            transition: transform 0.2s ease, shadow 0.2s ease;
+            transition: transform 0.14s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.14s ease, background-color 0.14s ease;
             cursor: pointer;
+            border-radius: 16px;
+            box-shadow: 0 6px 0 #d1e7dd, 0 10px 20px rgba(0, 0, 0, 0.08) !important;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
         }
         .garden-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.15) !important;
+            transform: translateY(-4px);
+            box-shadow: 0 10px 0 #badbcc, 0 14px 24px rgba(0, 0, 0, 0.12) !important;
+        }
+        .garden-card:active,
+        .garden-card.is-pressed {
+            transform: translateY(4px) scale(0.97) !important;
+            box-shadow: 0 2px 0 #badbcc, 0 4px 8px rgba(0, 0, 0, 0.1) !important;
+            background-color: #f1f8f5 !important;
+        }
+
+        /* Hiệu ứng nút bấm 3D lún sâu khi nhấn */
+        .btn-3d {
+            position: relative;
+            transition: transform 0.12s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.12s ease, filter 0.12s ease !important;
+            box-shadow: 0 4px 0 #146c43, 0 6px 12px rgba(25, 135, 84, 0.25);
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        .btn-3d:active,
+        .btn-3d.is-pressed {
+            transform: translateY(3px) scale(0.96) !important;
+            box-shadow: 0 1px 0 #146c43, 0 2px 4px rgba(25, 135, 84, 0.2) !important;
+            filter: brightness(0.9);
         }
     </style>
 </head>
@@ -26,15 +52,36 @@
         <div class="row justify-content-center g-4">
             {% for key, crop in crops.items() %}
             <div class="col-md-5 col-lg-4">
-                <div class="card h-100 shadow-sm border-0 garden-card text-center p-4">
+                <div class="card h-100 border-0 garden-card text-center p-4" onclick="openGarden(this, '/plant/{{ key }}')">
                     <div class="display-1 mb-3">{{ crop.icon }}</div>
                     <h3 class="fw-bold mb-2">Khu Vườn {{ crop.name }}</h3>
                     <p class="text-muted small mb-4">Chẩn đoán các bệnh lý trên lá {{ crop.name | lower }} & quản lý dữ liệu huấn luyện riêng biệt.</p>
-                    <a href="/plant/{{ key }}" class="btn btn-outline-success fw-bold rounded-pill mt-auto">Vào Khu Vườn</a>
+                    <a href="/plant/{{ key }}" onclick="event.preventDefault()" class="btn btn-success btn-3d fw-bold rounded-pill py-2 mt-auto">
+                        Vào Khu Vườn
+                    </a>
                 </div>
             </div>
             {% endfor %}
         </div>
     </div>
+
+    <script>
+        function openGarden(cardEl, url) {
+            // Rung phản hồi nhẹ trên điện thoại
+            try { if (navigator.vibrate) navigator.vibrate(20); } catch (e) {}
+
+            // Giữ trạng thái lún nút trong 160ms để mắt nhìn rõ hiệu ứng vừa nhấn
+            cardEl.classList.add('is-pressed');
+            const btn = cardEl.querySelector('.btn-3d');
+            if (btn) {
+                btn.classList.add('is-pressed');
+                btn.innerText = '⏳ Đang vào...';
+            }
+
+            setTimeout(() => {
+                window.location.href = url;
+            }, 160);
+        }
+    </script>
 </body>
 </html>
